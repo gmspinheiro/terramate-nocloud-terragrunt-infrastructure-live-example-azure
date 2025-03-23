@@ -19,5 +19,5 @@ include "envcommon" {
 }
 
 inputs = {
-  name = "mi-cebolas"
+  name = "mi-nocloud-cebolas"
 }

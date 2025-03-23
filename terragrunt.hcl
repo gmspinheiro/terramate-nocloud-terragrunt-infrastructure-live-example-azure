@@ -44,7 +44,7 @@ terraform {
   backend "azurerm" {
     resource_group_name  = "lab-access-frameowrk"
     storage_account_name = "staccaccesscontrolframe"
-    container_name       = "data-tfstate"
+    container_name       = "terramate"
     subscription_id    = "77210ef6-94c3-4d09-97f2-082a15991b08"
     key                  = "${path_relative_to_include()}/terraform.tfstate"
     use_azuread_auth     = true
