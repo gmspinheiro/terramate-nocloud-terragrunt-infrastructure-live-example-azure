@@ -1,0 +1,148 @@
+name: Terragrunt Preview
+
+on:
+  pull_request:
+
+jobs:
+  preview:
+    name: Plan Terragrunt changes in changed Terramate stacks
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      checks: read
+
+    steps:
+      - name: Prepare pull request preview comment
+        if: github.event.pull_request
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          header: preview
+          message: |
+            ## Preview of Terragrunt changes in ${{ github.event.pull_request.head.sha }}
+
+            :warning: preview is being created... please stand by!
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      ### Install tooling
+      - name: Install Terramate
+        uses: terramate-io/terramate-action@v2
+
+      - name: Install asdf
+        uses: asdf-vm/actions/setup@v3
+
+      - name: Install Terraform and Terragrunt with asdf
+        run: |
+          asdf plugin add terraform
+          asdf plugin add terragrunt
+          asdf install terraform
+          asdf install terragrunt
+
+      - name: Check Terramate formatting
+        run: terramate fmt --check
+
+      - name: Check Terragrunt formatting
+        run: terragrunt fmt --terragrunt-check
+
+      - name: List changed stacks
+        id: list
+        run: terramate list --changed
+
+      - name: Initialize Terragrunt in changed stacks
+        if: steps.list.outputs.stdout
+        id: init
+        run: |
+          terramate run \
+            --parallel 1 \
+            --changed \
+            -- \
+            terragrunt init -lock-timeout=5m
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+
+      - name: Validate Terragrunt configuration in changed stacks
+        if: steps.list.outputs.stdout
+        id: validate
+        run: |
+          terramate run \
+            --parallel 5 \
+            --changed \
+            -- \
+            terragrunt validate
+
+      - name: Plan Terragrunt changes in changed stacks
+        if: steps.list.outputs.stdout
+        id: plan
+        run: |
+          terramate run \
+            --parallel 5 \
+            --changed \
+            --continue-on-error \
+            -- \
+            terragrunt plan -out out.tfplan -lock=false
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+
+      ## Note: Due to a limitation in the size of a GitHub PR comment (65,536 characters), we are truncating the output if it's too long. For better and complete previews or changes consider Terramate Cloud.
+      ## Note: Depending on the setup, you may need to add pr-comment.txt to your .gitignore to avoid any failures
+      - name: Generate preview details
+        if: steps.list.outputs.stdout
+        id: comment
+        run: |
+          echo >>pr-comment.txt "## Preview of Terragrunt changes in ${{ github.event.pull_request.head.sha }}"
+          echo >>pr-comment.txt
+          echo >>pr-comment.txt "### Changed Stacks"
+          echo >>pr-comment.txt
+          echo >>pr-comment.txt '```bash'
+          echo >>pr-comment.txt "${{ steps.list.outputs.stdout }}"
+          echo >>pr-comment.txt '```'
+          echo >>pr-comment.txt
+          echo >>pr-comment.txt "#### Terragrunt Plan"
+          echo >>pr-comment.txt
+          echo >>pr-comment.txt '```terraform'
+          terramate run --changed -- terragrunt show out.tfplan |& dd bs=1024 count=248 >>pr-comment.txt
+          [ "${PIPESTATUS[0]}" == "141" ] && sed -i 's/#### Terragrunt Plan/#### :warning: Terragrunt Plan truncated: please check console output :warning:/' pr-comment.txt
+          echo >>pr-comment.txt '```'
+          cat pr-comment.txt >>$GITHUB_STEP_SUMMARY
+
+      - name: Generate preview when no stacks changed
+        if: success() && !steps.list.outputs.stdout
+        run: |
+          echo >>pr-comment.txt "## Preview of Terragrunt changes in ${{ github.event.pull_request.head.sha }}"
+          echo >>pr-comment.txt
+          echo >>pr-comment.txt "### Changed Stacks"
+          echo >>pr-comment.txt
+          echo >>pr-comment.txt 'No changed stacks, no detailed preview will be generated.'
+          cat pr-comment.txt >>$GITHUB_STEP_SUMMARY
+
+      - name: Generate preview when things failed
+        if: always() && failure()
+        run: |
+          echo >>pr-comment.txt "## Preview of Terragrunt changes in ${{ github.event.pull_request.head.sha }}"
+          echo >>pr-comment.txt
+          echo >>pr-comment.txt "### Changed Stacks"
+          echo >>pr-comment.txt
+          echo >>pr-comment.txt '```bash'
+          echo >>pr-comment.txt "${{ steps.list.outputs.stdout }}"
+          echo >>pr-comment.txt '```'
+          echo >>pr-comment.txt ':boom: Generating preview failed. Please see details in Actions output.'
+          cat pr-comment.txt >>$GITHUB_STEP_SUMMARY
+
+      - name: Publish generated preview as GitHub commnent
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          header: preview
+          path: pr-comment.txt

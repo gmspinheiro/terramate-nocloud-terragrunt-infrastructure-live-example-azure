@@ -10,16 +10,5 @@ terramate {
     #   "git-out-of-sync",
     #   "outdated-code",
     # ]
-
-    # Configure the namespace of your Terramate Cloud organization
-    cloud {
-      organization = "gmspinheiro"
-    }
-
-    run {
-      env {
-        TG_BUCKET_PREFIX = "tmcd-gmsp-"
-      }
-    }
   }
 }
