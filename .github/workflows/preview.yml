@@ -73,6 +73,10 @@ jobs:
             --changed \
             -- \
             terragrunt validate
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
 
       - name: Plan Terragrunt changes in changed stacks
         if: steps.list.outputs.stdout
