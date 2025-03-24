@@ -92,6 +92,7 @@ jobs:
           ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+          TG_NO_COLOR: "true"
 
       ## Note: Due to a limitation in the size of a GitHub PR comment (65,536 characters), we are truncating the output if it's too long. For better and complete previews or changes consider Terramate Cloud.
       ## Note: Depending on the setup, you may need to add pr-comment.txt to your .gitignore to avoid any failures
@@ -114,6 +115,8 @@ jobs:
           [ "${PIPESTATUS[0]}" == "141" ] && sed -i 's/#### Terragrunt Plan/#### :warning: Terragrunt Plan truncated: please check console output :warning:/' pr-comment.txt
           echo >>pr-comment.txt '```'
           cat pr-comment.txt >>$GITHUB_STEP_SUMMARY
+        env:
+          TG_NO_COLOR: "true"
 
       - name: Generate preview when no stacks changed
         if: success() && !steps.list.outputs.stdout
