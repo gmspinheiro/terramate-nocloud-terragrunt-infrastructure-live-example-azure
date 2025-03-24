@@ -19,5 +19,5 @@ include "envcommon" {
 }
 
 inputs = {
-  custom_name = "mi-nocloud-cebolas"
+  custom_name = "mi-nocloud-plantas"
 }
